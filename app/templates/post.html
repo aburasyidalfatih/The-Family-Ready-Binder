@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Post #{{ post.id }}{% endblock %}
+{% block content %}
+<p><a href="/?status={{ post.status }}">← Kembali</a></p>
+<h1>#{{ post.id }} · {{ post.headline or post.topic }}</h1>
+<p class="muted">
+  {{ post.pillar }} · Status: <b class="status s-{{ post.status }}">{{ post.status }}</b>
+  {% if post.scheduled_at and post.status in ('approved', 'publishing') %} · Tayang {{ post.scheduled_at | local_time }} ({{ config.TIMEZONE }}){% endif %}
+</p>
+
+{% if busy %}<div class="notice info">Sedang diproses… muat ulang halaman ini dalam ±1 menit.</div>{% endif %}
+{% if post.error %}<div class="notice error">{{ post.error }}</div>{% endif %}
+
+<form method="post" action="/post/{{ post.id }}/action" class="post-form">
+  <div class="two-col">
+    <section>
+      {% if post.image_file %}
+      <img class="preview" src="/media/{{ post.image_file }}?v={{ post.image_file }}" alt="">
+      <p class="muted small">Cek ejaan teks di gambar sebelum menyetujui.</p>
+      {% else %}
+      <div class="noimg big">Belum ada gambar</div>
+      {% endif %}
+      <label>Prompt gambar
+        <textarea name="image_prompt" rows="12">{{ post.image_prompt or '' }}</textarea>
+      </label>
+      <div class="row">
+        <button class="btn" name="action" value="regen_image">Buat ulang gambar</button>
+        <button class="btn" name="action" value="regen_captions">Buat ulang caption</button>
+      </div>
+    </section>
+
+    <section>
+      {% set chosen = (post.platforms or '').split(',') %}
+      <fieldset class="platforms">
+        <legend>Posting ke</legend>
+        {% for pf in PLATFORMS %}
+        <label class="check"><input type="checkbox" name="pf_{{ pf }}" value="1" {{ 'checked' if pf in chosen }}> {{ pf|capitalize }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <label>Caption Facebook
+        <textarea name="fb_caption" rows="7">{{ post.fb_caption or '' }}</textarea>
+      </label>
+      <label>Caption Instagram
+        <textarea name="ig_caption" rows="7">{{ post.ig_caption or '' }}</textarea>
+      </label>
+      <label>Teks Threads <span class="muted small">(maks. 500 karakter)</span>
+        <textarea name="threads_text" rows="4" maxlength="500">{{ post.threads_text or '' }}</textarea>
+      </label>
+
+      <div class="actions">
+        <button class="btn" name="action" value="save">Simpan</button>
+
+        {% if post.status in ('draft', 'rejected', 'failed', 'partial') %}
+        <button class="btn primary" name="action" value="approve_next">Setujui → slot berikutnya ({{ next_slot.replace('T', ' ') }})</button>
+        <div class="row">
+          <input type="datetime-local" name="scheduled_at" value="{{ next_slot }}">
+          <button class="btn" name="action" value="approve_at">Setujui di waktu ini</button>
+        </div>
+        <button class="btn" name="action" value="post_now" onclick="return confirm('Posting sekarang ke platform yang dipilih?')">Posting sekarang</button>
+        {% endif %}
+
+        {% if post.status == 'approved' %}
+        <div class="row">
+          <input type="datetime-local" name="scheduled_at" value="{{ post.scheduled_at | local_input }}">
+          <button class="btn" name="action" value="approve_at">Ubah jadwal</button>
+        </div>
+        <button class="btn" name="action" value="unschedule">Batalkan jadwal (kembali ke draf)</button>
+        {% endif %}
+
+        {% if post.status in ('failed', 'partial') %}
+        <button class="btn primary" name="action" value="retry">Coba posting lagi (platform yang gagal saja)</button>
+        {% endif %}
+
+        {% if post.status == 'draft' %}
+        <button class="btn danger" name="action" value="reject">Tolak</button>
+        {% elif post.status == 'rejected' %}
+        <button class="btn" name="action" value="restore">Kembalikan ke draf</button>
+        {% endif %}
+      </div>
+
+      {% if results %}
+      <h3>Riwayat posting</h3>
+      <table class="results">
+        <tr><th>Waktu</th><th>Platform</th><th>Hasil</th></tr>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.at | local_time }}</td>
+          <td>{{ r.platform }}</td>
+          <td class="{{ 'ok' if r.ok else 'err' }}">{{ ('OK · ' ~ r.remote_id) if r.ok else r.message }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+    </section>
+  </div>
+</form>
+{% endblock %}

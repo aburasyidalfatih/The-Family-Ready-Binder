@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Pengaturan{% endblock %}
+{% block content %}
+<h1>Pengaturan akun</h1>
+{% if msg %}<div class="notice info">{{ msg }}</div>{% endif %}
+{% if err %}<div class="notice error">{{ err }}</div>{% endif %}
+
+<section class="panel">
+  <h2>Status koneksi</h2>
+  <ul class="status-list">
+    <li>Facebook Page: <b>{{ 'tersimpan' if has_fb else 'belum' }}</b></li>
+    <li>Instagram: <b>{{ 'tersimpan' if has_ig else 'belum' }}</b></li>
+    <li>Threads: <b>{{ 'tersimpan' if has_threads else 'belum' }}</b></li>
+  </ul>
+  {% if status %}
+  <table class="results">
+    {% for name, (ok, info) in status.items() %}
+    <tr><td>{{ name|capitalize }}</td><td class="{{ 'ok' if ok else 'err' }}">{{ '✓ ' if ok else '✗ ' }}{{ info }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <p><a class="btn" href="/settings?test=1">Tes koneksi</a></p>
+</section>
+
+<div class="two-col" style="margin-top:20px">
+  <section class="panel">
+    <h2>1. Facebook Page + Instagram</h2>
+    <ol class="steps">
+      <li>Buka <b>Graph API Explorer</b> di developers.facebook.com/tools/explorer dan pilih App Anda.</li>
+      <li>Klik <b>Generate Access Token</b> dengan izin: <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>pages_manage_posts</code>, <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>business_management</code>.</li>
+      <li>Salin token, tempel di bawah. Aplikasi akan menukarnya menjadi token Page yang tidak kedaluwarsa.</li>
+    </ol>
+    <form method="post" action="/settings/meta-token">
+      <label>User access token
+        <textarea name="user_token" rows="3" required></textarea>
+      </label>
+      <button class="btn primary">Ambil daftar Page</button>
+    </form>
+
+    {% if pages %}
+    <form method="post" action="/settings/meta-page" style="margin-top:16px">
+      <label>Pilih Page
+        <select name="page_id">
+          {% for p in pages %}
+          <option value="{{ p.id }}">{{ p.name }}{{ ' · IG @' ~ p.ig_username if p.ig_id else ' · (tanpa Instagram)' }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn primary">Simpan Page ini</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>2. Threads</h2>
+    <ol class="steps">
+      <li>Di Meta App, tambahkan use case <b>Access the Threads API</b> dengan izin <code>threads_basic</code> dan <code>threads_content_publish</code>.</li>
+      <li>Daftarkan Redirect URI ini di pengaturan Threads app:<br><code>{{ threads_redirect }}</code></li>
+      <li>Tambahkan akun Threads Anda sebagai <b>Threads Tester</b>, lalu terima undangannya di aplikasi Threads.</li>
+      <li>Klik tombol di bawah dan setujui.</li>
+    </ol>
+    <a class="btn primary" href="/threads/connect">Hubungkan Threads</a>
+    <p class="muted small">Token Threads berlaku 60 hari dan diperpanjang otomatis setiap minggu selama aplikasi berjalan.</p>
+  </section>
+</div>
+{% endblock %}

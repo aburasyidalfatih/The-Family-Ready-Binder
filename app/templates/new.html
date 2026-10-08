@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Buat konten{% endblock %}
+{% block content %}
+<h1>Buat konten</h1>
+
+<div class="two-col">
+  <section class="panel">
+    <h2>A. Biarkan AI membuat ide</h2>
+    <p class="muted">AI membuat judul, isi daftar, prompt gambar, gambar, dan caption untuk FB, IG, dan Threads.</p>
+    <form method="post" action="/new/ideas">
+      <label>Pilar
+        <select name="pillar">
+          <option value="">Bergiliran otomatis</option>
+          {% for p in pillars %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Topik (opsional)
+        <input name="topic" placeholder="mis. what to ask before moving a parent to assisted living">
+      </label>
+      <label>Jumlah draf
+        <input type="number" name="count" value="3" min="1" max="10">
+      </label>
+      <button class="btn primary">Generate</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>B. Pakai prompt gambar sendiri</h2>
+    <p class="muted">Tempel prompt (misalnya dari dokumen 30 prompt). Untuk beberapa prompt sekaligus, pisahkan dengan baris berisi <code>===</code>. Caption dibuat otomatis.</p>
+    <form method="post" action="/new/prompts">
+      <label>Pilar
+        <select name="pillar">
+          <option value="">Acak</option>
+          {% for p in pillars %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Prompt
+        <textarea name="prompts" rows="14" placeholder="Create a 1080x1350 (4:5) social media image...&#10;===&#10;Create a 1080x1080 square quote image..."></textarea>
+      </label>
+      <button class="btn primary">Generate dari prompt</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

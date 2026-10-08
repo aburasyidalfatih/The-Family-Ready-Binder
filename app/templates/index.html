@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+{% if dry_run or fake_ai %}
+<div class="notice warn">
+  Mode uji coba aktif:
+  {% if fake_ai %}<b>FAKE_AI</b> (tidak memanggil OpenAI){% endif %}
+  {% if dry_run %}<b>DRY_RUN</b> (tidak benar-benar memposting){% endif %}.
+  Ubah di file <code>.env</code> untuk mode sungguhan.
+</div>
+{% endif %}
+
+{% if jobs.running %}
+<div class="notice info">
+  Sedang membuat konten ({{ jobs.running }} proses). Gambar butuh ±30–90 detik per konten.
+  <a href="/?status=draft">Muat ulang</a> untuk melihat hasilnya.
+</div>
+{% endif %}
+{% if jobs.last_error %}
+<div class="notice error">Error terakhir saat membuat konten: {{ jobs.last_error }}</div>
+{% endif %}
+
+<div class="tabs">
+  {% for key, label in tabs.items() %}
+  <a href="/?status={{ key }}" class="{{ 'active' if key == status }}">
+    {{ label }} <span class="count">{{ counts.get(key, 0) }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+{% if status == 'draft' %}
+<form method="post" action="/run-auto-generate" class="inline-form">
+  <button class="btn">Buat {{ config.AUTO_GENERATE_COUNT }} draf otomatis sekarang</button>
+  <span class="muted">Draf otomatis harian: {{ 'aktif jam ' ~ config.AUTO_GENERATE_TIME if config.AUTO_GENERATE_DAILY else 'nonaktif' }} · Jam posting: {{ config.POST_TIMES | join(', ') }} ({{ config.TIMEZONE }})</span>
+</form>
+{% endif %}
+
+{% if not posts %}
+<p class="empty">Belum ada konten di sini.</p>
+{% else %}
+<div class="grid">
+  {% for p in posts %}
+  <a class="card" href="/post/{{ p.id }}">
+    {% if p.image_file %}
+    <img src="/media/{{ p.image_file }}" alt="" loading="lazy">
+    {% else %}
+    <div class="noimg">{{ 'Gambar gagal dibuat' if p.error else 'Membuat gambar…' }}</div>
+    {% endif %}
+    <div class="meta">
+      <div class="pillar">{{ p.pillar }}</div>
+      <div class="headline">{{ p.headline or p.topic }}</div>
+      {% if p.scheduled_at and p.status in ('approved', 'publishing') %}
+      <div class="when">Tayang: {{ p.scheduled_at | local_time }}</div>
+      {% elif p.published_at %}
+      <div class="when">Diposting: {{ p.published_at | local_time }}</div>
+      {% endif %}
+      {% if p.error %}<div class="err">{{ p.error[:120] }}</div>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
