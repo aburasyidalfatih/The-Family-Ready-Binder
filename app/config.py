@@ -14,7 +14,8 @@ def _bool(name: str, default: bool = False) -> bool:
 
 # --- Dashboard ---
 DASHBOARD_USER = os.getenv("DASHBOARD_USER", "admin")
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "ganti-password-ini")
+DEFAULT_PASSWORDS = {"", "ganti-password-ini", "ganti-dengan-password-kuat", "admin", "password"}
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Jakarta")
 # URL publik aplikasi (tanpa / di akhir). Wajib agar Meta bisa mengambil gambar.
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
@@ -66,6 +67,10 @@ POST_TIMES = [t.strip() for t in os.getenv("POST_TIMES", "19:30,07:30").split(",
 AUTO_GENERATE_DAILY = _bool("AUTO_GENERATE_DAILY", True)
 AUTO_GENERATE_TIME = os.getenv("AUTO_GENERATE_TIME", "09:00")
 AUTO_GENERATE_COUNT = int(os.getenv("AUTO_GENERATE_COUNT", "2"))
+# Post terjadwal yang terlewat lebih dari sekian jam (mis. server mati) tidak diposting otomatis
+MAX_LATE_HOURS = float(os.getenv("MAX_LATE_HOURS", "6"))
+# Gambar milik post yang ditolak dihapus setelah sekian hari
+MEDIA_RETENTION_DAYS = int(os.getenv("MEDIA_RETENTION_DAYS", "30"))
 
 # --- Meta (Facebook Page + Instagram) ---
 # App ID & Secret dipakai halaman Pengaturan untuk menukar token jadi permanen
@@ -85,3 +90,26 @@ THREADS_ACCESS_TOKEN = os.getenv("THREADS_ACCESS_TOKEN", "")
 
 # DRY_RUN=true -> tidak benar-benar memposting, hanya mencatat (untuk uji coba)
 DRY_RUN = _bool("DRY_RUN", False)
+
+
+def validate():
+    """Hentikan aplikasi bila pengaturan wajib belum aman."""
+    if DASHBOARD_PASSWORD in DEFAULT_PASSWORDS or len(DASHBOARD_PASSWORD) < 8:
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD belum diganti atau kurang dari 8 karakter. "
+            "Isi password yang kuat di .env sebelum menjalankan aplikasi."
+        )
+
+
+def warnings() -> list[str]:
+    """Peringatan yang ditampilkan di dashboard."""
+    out = []
+    host = PUBLIC_BASE_URL.split("://", 1)[-1]
+    if not DRY_RUN and (host.startswith("localhost") or host.startswith("127.0.0.1")):
+        out.append(
+            "PUBLIC_BASE_URL masih localhost. Meta tidak bisa mengambil gambar dari sini, "
+            "jadi posting sungguhan akan gagal. Isi dengan domain publik aplikasi."
+        )
+    elif not DRY_RUN and not PUBLIC_BASE_URL.startswith("https://"):
+        out.append("PUBLIC_BASE_URL sebaiknya memakai https:// agar Meta mau mengambil gambar.")
+    return out

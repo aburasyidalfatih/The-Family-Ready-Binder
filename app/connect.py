@@ -109,6 +109,8 @@ def threads_handle_callback(code: str, state: str) -> str:
     long_token = _check(r)["access_token"]
     db.set_setting("threads_user_id", user_id)
     db.set_setting("threads_token", long_token)
+    db.set_setting("threads_token_refreshed_at", db.now_utc())
+    db.set_setting("threads_token_refresh_error", "")
     return user_id
 
 

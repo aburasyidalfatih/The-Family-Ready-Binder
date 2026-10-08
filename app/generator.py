@@ -6,6 +6,7 @@ import random
 import uuid
 
 from . import config, db, imaging
+from .publishers import clip
 
 log = logging.getLogger("generator")
 
@@ -162,7 +163,7 @@ def create_post(pillar: str | None = None, topic: str | None = None, image_promp
         image_prompt=prompt,
         fb_caption=idea.get("fb_caption", ""),
         ig_caption=idea.get("ig_caption", ""),
-        threads_text=idea.get("threads_text", "")[:500],
+        threads_text=clip(idea.get("threads_text", "")),
         status="draft",
     )
     if with_image:

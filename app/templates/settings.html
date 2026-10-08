@@ -60,7 +60,9 @@
       <li>Klik tombol di bawah dan setujui.</li>
     </ol>
     <a class="btn primary" href="/threads/connect">Hubungkan Threads</a>
-    <p class="muted small">Token Threads berlaku 60 hari dan diperpanjang otomatis setiap minggu selama aplikasi berjalan.</p>
+    <p class="muted small">Token Threads berlaku 60 hari dan diperpanjang otomatis setiap minggu selama aplikasi berjalan.
+      {% if threads_refreshed_at %}Terakhir diperbarui: {{ threads_refreshed_at | local_time }}.{% endif %}</p>
+    {% if threads_refresh_error %}<div class="notice error">Perpanjangan token Threads gagal: {{ threads_refresh_error }}. Klik Hubungkan Threads lagi bila error berlanjut.</div>{% endif %}
   </section>
 </div>
 {% endblock %}

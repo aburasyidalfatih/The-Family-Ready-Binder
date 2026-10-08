@@ -56,7 +56,21 @@ def conn():
 
 def init():
     with conn() as c:
+        # WAL: penjadwal dan dashboard bisa membaca/menulis bersamaan tanpa saling mengunci
+        c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
+
+
+def recover_stuck_publishing() -> int:
+    """Post yang tertinggal di status 'publishing' (server mati saat memposting) dijadikan 'failed'
+    agar bisa dicoba lagi dari dashboard. Platform yang sudah sukses tidak akan diulang."""
+    with conn() as c:
+        cur = c.execute(
+            "UPDATE posts SET status = 'failed', "
+            "error = 'Proses posting terhenti (server restart). Cek riwayat, lalu klik Coba posting lagi.' "
+            "WHERE status = 'publishing'"
+        )
+        return cur.rowcount
 
 
 def insert_post(**fields) -> int:
@@ -142,3 +156,18 @@ def set_setting(key: str, value: str):
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
+
+
+def referenced_images() -> set[str]:
+    with conn() as c:
+        rows = c.execute("SELECT image_file FROM posts WHERE image_file IS NOT NULL").fetchall()
+    return {r["image_file"] for r in rows}
+
+
+def old_rejected_posts(before_iso: str):
+    """Post ditolak yang dibuat sebelum waktu tertentu dan masih punya gambar."""
+    with conn() as c:
+        return c.execute(
+            "SELECT * FROM posts WHERE status = 'rejected' AND image_file IS NOT NULL AND created_at < ?",
+            (before_iso,),
+        ).fetchall()

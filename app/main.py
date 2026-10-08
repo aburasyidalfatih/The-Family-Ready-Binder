@@ -3,11 +3,12 @@ import logging
 import secrets
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -26,7 +27,13 @@ _jobs = {"running": 0, "busy_posts": set(), "last_error": None}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    config.validate()
     db.init()
+    stuck = db.recover_stuck_publishing()
+    if stuck:
+        log.warning("%s post tertinggal di status 'publishing', diubah jadi 'failed'", stuck)
+    for w in config.warnings():
+        log.warning(w)
     scheduler.start()
     yield
     scheduler.stop()
@@ -36,6 +43,24 @@ app = FastAPI(title="Auto Post", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=config.BASE_DIR / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=config.BASE_DIR / "app" / "templates")
 security = HTTPBasic()
+
+
+def _same_origin(source: str, request: Request) -> bool:
+    netloc = urlparse(source).netloc
+    allowed = {request.headers.get("host", ""), urlparse(config.PUBLIC_BASE_URL).netloc}
+    return bool(netloc) and netloc in allowed
+
+
+@app.middleware("http")
+async def block_cross_site_posts(request: Request, call_next):
+    """Perlindungan CSRF: browser otomatis mengirim login Basic Auth, jadi form POST dari situs lain
+    harus ditolak. Browser selalu mengirim Origin/Referer untuk POST lintas situs."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        source = request.headers.get("origin") or request.headers.get("referer")
+        if source and not _same_origin(source, request):
+            log.warning("POST lintas situs ditolak: %s -> %s", source, request.url.path)
+            return PlainTextResponse("Permintaan ditolak: asal permintaan tidak cocok.", status_code=403)
+    return await call_next(request)
 
 
 def auth(credentials: HTTPBasicCredentials = Depends(security)):
@@ -60,7 +85,7 @@ def local_input(iso: str | None) -> str:
 
 templates.env.filters["local_time"] = local_time
 templates.env.filters["local_input"] = local_input
-templates.env.globals.update(config=config, PLATFORMS=PLATFORMS)
+templates.env.globals.update(config=config, PLATFORMS=PLATFORMS, config_warnings=config.warnings)
 
 
 def utc_iso(dt: datetime) -> str:
@@ -75,18 +100,24 @@ def redirect(url: str):
 def _job_generate(kind: str, **kw):
     with _jobs_lock:
         _jobs["running"] += 1
+    if kind == "ideas":
+        tasks = [lambda: generator.create_post(pillar=kw["pillar"] or generator.next_pillar(), topic=kw.get("topic"))
+                 for _ in range(kw["count"])]
+    else:
+        tasks = [lambda p=p: generator.create_post(pillar=kw["pillar"] or None, image_prompt=p)
+                 for p in kw["prompts"]]
+    errors = []
     try:
-        if kind == "ideas":
-            for _ in range(kw["count"]):
-                pillar = kw["pillar"] or generator.next_pillar()
-                generator.create_post(pillar=pillar, topic=kw.get("topic"))
-        elif kind == "prompts":
-            for p in kw["prompts"]:
-                generator.create_post(pillar=kw["pillar"] or None, image_prompt=p)
-        _jobs["last_error"] = None
-    except Exception as e:
-        log.exception("Generate gagal")
-        _jobs["last_error"] = str(e)
+        # satu konten gagal tidak menghentikan konten berikutnya
+        for task in tasks:
+            try:
+                task()
+            except Exception as e:
+                log.exception("Generate gagal")
+                errors.append(str(e))
+        _jobs["last_error"] = (
+            f"{len(errors)} dari {len(tasks)} konten gagal dibuat. Terakhir: {errors[-1]}" if errors else None
+        )
     finally:
         with _jobs_lock:
             _jobs["running"] -= 1
@@ -98,6 +129,9 @@ def _job_regen_image(post_id: int):
         post = db.get_post(post_id)
         fname = generator.generate_image(post["image_prompt"], label=post["headline"] or "")
         db.update_post(post_id, image_file=fname, error=None)
+        # hapus gambar lama agar folder media tidak terus membengkak
+        if post["image_file"] and post["image_file"] != fname:
+            (config.MEDIA_DIR / post["image_file"]).unlink(missing_ok=True)
     except Exception as e:
         log.exception("Regenerate gambar gagal")
         db.update_post(post_id, error=f"Gagal membuat gambar: {e}")
@@ -114,7 +148,7 @@ def _job_regen_captions(post_id: int):
             post_id,
             fb_caption=c.get("fb_caption", ""),
             ig_caption=c.get("ig_caption", ""),
-            threads_text=c.get("threads_text", "")[:500],
+            threads_text=publishers.clip(c.get("threads_text", "")),
             error=None,
         )
     except Exception as e:
@@ -227,7 +261,7 @@ def _save_fields(post_id: int, form: dict):
         post_id,
         fb_caption=form.get("fb_caption", ""),
         ig_caption=form.get("ig_caption", ""),
-        threads_text=(form.get("threads_text", "") or "")[:500],
+        threads_text=publishers.clip(form.get("threads_text", "")),
         image_prompt=form.get("image_prompt", ""),
         platforms=",".join(platforms),
     )
@@ -254,19 +288,31 @@ async def post_action(request: Request, post_id: int, bg: BackgroundTasks):
             db.update_post(post_id, error="Belum ada gambar")
             return redirect(f"/post/{post_id}")
         if action == "approve_at" and form.get("scheduled_at"):
-            local = datetime.strptime(form["scheduled_at"], "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
+            try:
+                local = datetime.strptime(form["scheduled_at"], "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
+            except ValueError:
+                db.update_post(post_id, error="Format waktu tidak valid")
+                return redirect(f"/post/{post_id}")
+            if local < datetime.now(timezone.utc) - timedelta(minutes=5):
+                db.update_post(post_id, error="Waktu yang dipilih sudah lewat. Pilih waktu yang akan datang.")
+                return redirect(f"/post/{post_id}")
             when = utc_iso(local)
         else:
             when = utc_iso(scheduler.next_free_slot())
         db.update_post(post_id, status="approved", scheduled_at=when, error=None)
         return redirect("/?status=draft")
     elif action == "post_now":
+        if post["status"] in ("publishing", "published") or post_id in _jobs["busy_posts"]:
+            return redirect(f"/post/{post_id}")
         if not db.get_post(post_id)["image_file"]:
             db.update_post(post_id, error="Belum ada gambar")
             return redirect(f"/post/{post_id}")
         db.update_post(post_id, status="publishing", scheduled_at=utc_iso(datetime.now(timezone.utc)))
         bg.add_task(_job_publish, post_id)
     elif action == "retry":
+        # cegah posting ganda bila tombol diklik dua kali atau post sedang diproses
+        if post["status"] not in ("failed", "partial") or post_id in _jobs["busy_posts"]:
+            return redirect(f"/post/{post_id}")
         db.update_post(post_id, status="publishing")
         bg.add_task(_job_publish, post_id)
     elif action == "unschedule":
@@ -302,6 +348,8 @@ def settings_page(request: Request, msg: str = "", err: str = "", test: int = 0)
             "has_fb": bool(publishers.fb_page_id() and publishers.fb_token()),
             "has_ig": bool(publishers.ig_user_id()),
             "has_threads": bool(publishers.threads_user_id() and publishers.threads_token()),
+            "threads_refreshed_at": db.get_setting("threads_token_refreshed_at"),
+            "threads_refresh_error": db.get_setting("threads_token_refresh_error"),
         },
     )
 

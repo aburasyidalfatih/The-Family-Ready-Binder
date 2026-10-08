@@ -16,6 +16,7 @@
     </nav>
   </header>
   <main>
+    {% for w in config_warnings() %}<div class="notice error">{{ w }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>
 </body>

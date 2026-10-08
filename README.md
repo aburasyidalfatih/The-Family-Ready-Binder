@@ -15,7 +15,6 @@ Setiap hari aplikasi juga bisa membuat draf baru secara otomatis (default 2 draf
 Butuh Python 3.11+.
 
 ```bash
-cd autopost
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -85,7 +84,7 @@ Alternatif lain: Render (paket berbayar dengan persistent disk), VPS (DigitalOce
 
 **Threads**
 
-Klik **Hubungkan Threads** lalu setujui. Token berlaku 60 hari dan diperpanjang otomatis setiap minggu.
+Klik **Hubungkan Threads** lalu setujui. Token berlaku 60 hari dan diperpanjang otomatis setiap minggu (dicek tiap hari, tanggal perpanjangan terakhir disimpan di database sehingga aman walau sering redeploy). Kalau perpanjangan gagal, peringatannya muncul di halaman Pengaturan.
 
 Klik **Tes koneksi**. Ketiganya harus bertanda ✓.
 
@@ -101,6 +100,8 @@ Klik **Tes koneksi**. Ketiganya harus bertanda ✓.
   - **Posting sekarang:** langsung tayang.
   - **Buat ulang gambar / caption** kalau hasilnya kurang bagus.
 - **Sebagian gagal / Gagal:** lihat pesan error, perbaiki, lalu **Coba posting lagi**. Platform yang sudah sukses tidak diposting ulang.
+- Kalau server restart saat sedang memposting, post tersebut otomatis dipindah ke **Gagal** agar bisa dicoba lagi.
+- Kalau server mati sampai jadwal terlewat lebih dari `MAX_LATE_HOURS` jam, post tidak diposting otomatis (supaya tidak ada banyak post basi terbit sekaligus). Post masuk **Gagal**; setujui ulang dengan jadwal baru atau klik **Coba posting lagi**.
 
 Saran ritme: setujui konten untuk 1–2 minggu sekaligus di akhir pekan.
 
@@ -115,6 +116,8 @@ Saran ritme: setujui konten untuk 1–2 minggu sekaligus di akhir pekan.
 | `OPENAI_IMAGE_QUALITY` | `low` / `medium` / `high`. Kualitas lebih tinggi = biaya lebih tinggi |
 | `OPENAI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL` | Ganti model jika OpenAI merilis yang baru |
 | `BRAND_HANDLE`, `PILLARS`, `BRAND_STYLE`, `BRAND_AUDIENCE` | Identitas brand |
+| `MAX_LATE_HOURS` | Batas keterlambatan posting terjadwal (default 6 jam, `0` = tanpa batas) |
+| `MEDIA_RETENTION_DAYS` | Gambar post yang ditolak dihapus setelah sekian hari (default 30). File gambar yang tidak dipakai post mana pun dihapus otomatis tiap malam |
 
 ---
 
@@ -123,7 +126,7 @@ Saran ritme: setujui konten untuk 1–2 minggu sekaligus di akhir pekan.
 - **Gambar AI kadang salah eja.** Selalu cek sebelum menyetujui; itulah gunanya tahap review.
 - **Batas API:** Instagram dan Threads membatasi jumlah posting via API per 24 jam. Untuk 1–3 post per hari, batas ini tidak akan tercapai.
 - **Biaya OpenAI:** dihitung per gambar dan per caption. Cek harga terbaru di openai.com/pricing dan pasang batas pemakaian (usage limit) di akun OpenAI.
-- **Keamanan:** jangan bagikan file `.env`. Ganti `DASHBOARD_PASSWORD` dengan password kuat. Gambar di `/media/...` sengaja bisa diakses publik karena Meta perlu mengambilnya.
+- **Keamanan:** jangan bagikan file `.env`. `DASHBOARD_PASSWORD` wajib diganti (min. 8 karakter); aplikasi menolak start dengan password bawaan. Form dashboard menolak permintaan POST dari situs lain (perlindungan CSRF). Gambar di `/media/...` sengaja bisa diakses publik karena Meta perlu mengambilnya.
 - **Konten:** hindari klaim medis, hukum, dan keuangan yang spesifik. Prompt AI sudah diarahkan ke sana, tapi tetap periksa.
 - API Meta dan OpenAI bisa berubah. Jika muncul error versi, coba naikkan `GRAPH_VERSION` atau ganti nama model di `.env`.
 
@@ -139,4 +142,12 @@ app/
   scheduler.py   jadwal posting, draf harian, perpanjang token
   db.py          SQLite
   templates/     halaman HTML
+tests/           tes otomatis (mode uji coba, tanpa OpenAI/Meta)
+```
+
+Menjalankan tes:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
 ```

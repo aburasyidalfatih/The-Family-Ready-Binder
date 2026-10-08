@@ -1,6 +1,7 @@
 """Memposting ke Facebook Page, Instagram, dan Threads lewat API resmi Meta."""
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -12,8 +13,24 @@ THREADS = "https://graph.threads.net/v1.0"
 TIMEOUT = httpx.Timeout(60.0)
 
 
+THREADS_MAX_CHARS = 500
+THREADS_REFRESH_EVERY = timedelta(days=7)
+
+
 class PublishError(Exception):
     pass
+
+
+def clip(text: str | None, limit: int = THREADS_MAX_CHARS) -> str:
+    """Potong teks agar muat batas karakter, di batas kata terakhir (bukan di tengah kata)."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    space = cut.rfind(" ")
+    if space > limit * 0.6:
+        cut = cut[:space]
+    return cut.rstrip(" ,.;:-") + "…"
 
 
 def _check(r: httpx.Response) -> dict:
@@ -138,7 +155,7 @@ def publish_threads(post) -> str:
         data={
             "media_type": "IMAGE",
             "image_url": image_url(post),
-            "text": (post["threads_text"] or "")[:500],
+            "text": clip(post["threads_text"]),
             "access_token": token,
         },
         timeout=TIMEOUT,
@@ -153,22 +170,30 @@ def publish_threads(post) -> str:
     return _check(r)["id"]
 
 
-def refresh_threads_token() -> bool:
-    """Token Threads berlaku 60 hari; diperpanjang otomatis tiap minggu."""
+def refresh_threads_token(force: bool = False) -> bool:
+    """Token Threads berlaku 60 hari. Dicek tiap hari dan diperpanjang bila sudah >= 7 hari
+    sejak perpanjangan terakhir. Tanggal disimpan di database agar tidak ter-reset saat redeploy."""
     token = threads_token()
     if not token or config.DRY_RUN:
         return False
-    r = httpx.get(
-        "https://graph.threads.net/refresh_access_token",
-        params={"grant_type": "th_refresh_token", "access_token": token},
-        timeout=TIMEOUT,
-    )
+    last = db.get_setting("threads_token_refreshed_at")
+    now = datetime.now(timezone.utc)
+    if not force and last and datetime.fromisoformat(last) > now - THREADS_REFRESH_EVERY:
+        return False
     try:
+        r = httpx.get(
+            "https://graph.threads.net/refresh_access_token",
+            params={"grant_type": "th_refresh_token", "access_token": token},
+            timeout=TIMEOUT,
+        )
         data = _check(r)
-    except PublishError as e:
+    except (PublishError, httpx.HTTPError) as e:
         log.error("Gagal memperpanjang token Threads: %s", e)
+        db.set_setting("threads_token_refresh_error", f"{db.now_utc()}: {e}")
         return False
     db.set_setting("threads_token", data["access_token"])
+    db.set_setting("threads_token_refreshed_at", db.now_utc())
+    db.set_setting("threads_token_refresh_error", "")
     log.info("Token Threads diperpanjang")
     return True
 
