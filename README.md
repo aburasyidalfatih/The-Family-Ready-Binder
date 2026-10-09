@@ -6,7 +6,9 @@ Alur kerja:
 2. **Review:** Anda cek gambar di dashboard, edit caption bila perlu, lalu klik **Setujui**.
 3. **Posting otomatis:** pada jam yang dijadwalkan, aplikasi memposting ke FB Page, Instagram, dan Threads.
 
-Setiap hari aplikasi juga bisa membuat draf baru secara otomatis (default 2 draf, jam 09:00 WIB). Draf otomatis **tidak** langsung diposting dan tetap menunggu persetujuan Anda.
+Setiap hari aplikasi juga bisa membuat draf baru secara otomatis (default 2 draf, jam 09:00 WIB).
+
+Gaya konten: campuran checklist, daftar bernomor, pertanyaan, kutipan, dan cerita singkat yang relatable. AI diarahkan agar tidak memakai *engagement bait* ("Comment YES", "Tag a friend") yang diturunkan jangkauannya oleh Meta, tidak mengarang pengalaman pribadi palsu, dan hanya sesekali menyebut produk. Draf otomatis **tidak** langsung diposting dan tetap menunggu persetujuan Anda.
 
 ---
 
@@ -111,7 +113,8 @@ Saran ritme: setujui konten untuk 1–2 minggu sekaligus di akhir pekan.
 
 | Variabel | Fungsi |
 |---|---|
-| `POST_TIMES` | Jam posting (zona `TIMEZONE`). Default `19:30,07:30` WIB = pagi & malam waktu New York |
+| `POST_TIMEZONE`, `POST_TIMES` | Jam posting menurut zona audiens. Disarankan `America/New_York` + `08:30,20:30`, sehingga otomatis mengikuti DST di AS. Dashboard tetap menampilkan waktu `TIMEZONE` (WIB) beserta jam New York-nya |
+| `PRODUCT_NAME`, `PRODUCT_DESCRIPTION`, `PRODUCT_URL`, `CTA_EVERY` | CTA produk yang halus di 1 dari setiap `CTA_EVERY` post (default 5). Kosongkan `PRODUCT_NAME` untuk mematikan |
 | `AUTO_GENERATE_DAILY`, `AUTO_GENERATE_TIME`, `AUTO_GENERATE_COUNT` | Draf otomatis harian |
 | `OPENAI_IMAGE_QUALITY` | `low` / `medium` / `high`. Kualitas lebih tinggi = biaya lebih tinggi |
 | `OPENAI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL` | Ganti model jika OpenAI merilis yang baru |

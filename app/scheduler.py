@@ -10,6 +10,7 @@ from . import config, db, generator, publishers
 
 log = logging.getLogger("scheduler")
 TZ = ZoneInfo(config.TIMEZONE)
+POST_TZ = ZoneInfo(config.POST_TIMEZONE)
 _sched: BackgroundScheduler | None = None
 
 
@@ -17,12 +18,13 @@ def next_free_slot(after: datetime | None = None) -> datetime:
     """Slot jam posting berikutnya (POST_TIMES) yang belum terisi. Hasil dalam UTC."""
     after = after or datetime.now(timezone.utc)
     taken = db.scheduled_times()
-    local = after.astimezone(TZ)
+    local = after.astimezone(POST_TZ)
     for day in range(0, 60):
         d = (local + timedelta(days=day)).date()
         for t in sorted(config.POST_TIMES):
             hh, mm = (int(x) for x in t.split(":"))
-            slot = datetime(d.year, d.month, d.day, hh, mm, tzinfo=TZ).astimezone(timezone.utc)
+            # zoneinfo otomatis memperhitungkan DST pada tanggal tersebut
+            slot = datetime(d.year, d.month, d.day, hh, mm, tzinfo=POST_TZ).astimezone(timezone.utc)
             if slot > after and slot.replace(microsecond=0).isoformat() not in taken:
                 return slot
     return after + timedelta(hours=1)

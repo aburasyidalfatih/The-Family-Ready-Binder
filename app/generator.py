@@ -29,23 +29,41 @@ Audience: {config.BRAND_AUDIENCE}
 Tone: warm, calm, practical, respectful. Never fear-based, morbid, or salesy.
 Write in natural American English. Never give specific medical, legal, tax, or investment advice;
 keep everything as general checklists and conversation starters.
-Content is posted as an image (checklist, list, or quote) on Facebook, Instagram, and Threads.
-Posts that get saved and shared win: practical checklists, gentle conversation starters, nostalgia.
+Content is posted as an image (checklist, list, quote, or short story) on Facebook, Instagram, and Threads.
+Posts that get saved and shared win: practical checklists, gentle conversation starters, nostalgia,
+and short, relatable everyday moments.
+
+Authenticity rules:
+- Sound like a thoughtful person, not a brand or a content machine. Plain words, no buzzwords,
+  no "Let's dive in", no "game-changer", no excessive emojis (0-2 per caption).
+- Never invent first-person experiences or fake testimonials ("When my mom got sick, I...").
+  For stories, use relatable scenarios in second person ("You find the old recipe card...")
+  or about "many families", so nothing pretends to be a true personal story.
+
+Engagement rules (Meta reduces reach of engagement bait):
+- End with ONE genuine, specific, open-ended question people actually want to answer
+  (e.g. "What's one document you wish your parents had written down?").
+- Never use bait like "Comment YES", "Type AMEN", "Tag a friend", "Share if you agree",
+  "Like if...", or yes/no questions.
+
 Always answer with a single JSON object and nothing else."""
 
 IDEA_INSTRUCTIONS = """Create ONE new post for the content pillar: "{pillar}".
 {topic_line}
+Suggested format for this post: "{format_hint}" (use it unless it truly does not fit the topic).
+{cta_line}
 Avoid repeating these recent headlines:
 {recent}
 
 Return JSON with exactly these keys:
 - "topic": short topic label (max 8 words)
-- "format": "checklist" | "numbered" | "quote" | "questions"
-- "headline": image headline, max 12 words (for "quote" format: the quote itself, max 25 words)
-- "items": array of 4-8 short lines for the image, max 8 words each (empty array for "quote")
+- "format": "checklist" | "numbered" | "quote" | "questions" | "story"
+- "headline": image headline, max 12 words (for "quote": the quote itself, max 25 words;
+  for "story": one evocative line that captures the moment, max 15 words)
+- "items": array of 4-8 short lines for the image, max 8 words each (empty array for "quote" and "story")
 - "footer_cta": short line under the list, max 8 words (e.g. "Save this for later")
 - "illustration": one sentence describing a small, gentle illustration or background (no people's faces in close-up, no logos, no text)
-- "fb_caption": Facebook caption, 60-110 words, warm, ends with one question that invites comments, no hashtags
+- "fb_caption": Facebook caption, 60-110 words (story format: 90-150 words telling the moment), warm, ends with one genuine question, no hashtags
 - "ig_caption": Instagram caption, 40-80 words, ends with "Save this for later." then a blank line and 5 relevant hashtags
 - "threads_text": Threads post, 1-3 short conversational sentences, max 400 characters, no hashtags"""
 
@@ -53,12 +71,40 @@ CAPTION_INSTRUCTIONS = """Here is an image prompt that was already written for a
 ---
 {image_prompt}
 ---
+{cta_line}
 Write the matching captions. Return JSON with exactly these keys:
 - "topic": short topic label (max 8 words)
 - "headline": the image headline from the prompt
-- "fb_caption": Facebook caption, 60-110 words, warm, ends with one question that invites comments, no hashtags
+- "fb_caption": Facebook caption, 60-110 words, warm, ends with one genuine question, no hashtags
 - "ig_caption": Instagram caption, 40-80 words, ends with "Save this for later." then a blank line and 5 relevant hashtags
 - "threads_text": Threads post, 1-3 short conversational sentences, max 400 characters, no hashtags"""
+
+NO_CTA = "Do not mention any product, link, or offer in this post. Pure value only."
+
+# Campuran format: checklist tetap dominan, ditambah cerita singkat agar tidak monoton
+FORMAT_WEIGHTS = {"checklist": 35, "numbered": 20, "story": 20, "questions": 15, "quote": 10}
+
+
+def pick_format() -> str:
+    return random.choices(list(FORMAT_WEIGHTS), weights=list(FORMAT_WEIGHTS.values()))[0]
+
+
+def cta_line() -> str:
+    """Instruksi CTA produk: hanya 1 dari CTA_EVERY post yang menyebut produk, dan tetap halus."""
+    if not config.PRODUCT_NAME:
+        return NO_CTA
+    idx = int(db.get_setting("cta_idx", "0") or 0)
+    db.set_setting("cta_idx", str(idx + 1))
+    if idx % config.CTA_EVERY != config.CTA_EVERY - 1:
+        return NO_CTA
+    about = f" ({config.PRODUCT_DESCRIPTION})" if config.PRODUCT_DESCRIPTION else ""
+    fb_link = f' and end the Facebook caption with the link {config.PRODUCT_URL}' if config.PRODUCT_URL else ""
+    return (
+        f'This post includes a soft mention of our product "{config.PRODUCT_NAME}"{about}. '
+        "Keep 90% of the post pure value; mention the product in one natural sentence near the end "
+        f'of each caption, never pushy, no prices, no "buy now"{fb_link}. '
+        'In the Instagram caption say "link in bio" instead of a URL. In Threads, no link.'
+    )
 
 
 def build_image_prompt(idea: dict) -> str:
@@ -67,6 +113,10 @@ def build_image_prompt(idea: dict) -> str:
     lines = ["Create a portrait social media image (2:3). Keep all text inside the central area with wide margins on every side."]
     if fmt == "quote":
         lines.append(f'Quote in large elegant serif, centered:\n"{idea["headline"]}"')
+    elif fmt == "story":
+        lines.append(
+            f'One short line in large elegant serif, centered, like a moment remembered:\n"{idea["headline"]}"'
+        )
     else:
         lines.append(f'Headline (large, top): "{idea["headline"]}"')
         items = idea.get("items") or []
@@ -103,7 +153,8 @@ def generate_idea(pillar: str, topic: str | None = None) -> dict:
         return _fake_idea(pillar, topic)
     topic_line = f'Topic requested by the owner: "{topic}"' if topic else "Pick a fresh, specific topic."
     return _chat_json(
-        IDEA_INSTRUCTIONS.format(pillar=pillar, topic_line=topic_line, recent=_recent_headlines())
+        IDEA_INSTRUCTIONS.format(pillar=pillar, topic_line=topic_line, recent=_recent_headlines(),
+                                 format_hint=pick_format(), cta_line=cta_line())
     )
 
 
@@ -116,7 +167,7 @@ def captions_for_prompt(image_prompt: str) -> dict:
             "ig_caption": "Test caption for Instagram. Save this for later.\n\n#family #caregiving #retirement #organized #legacy",
             "threads_text": "Test post for Threads.",
         }
-    return _chat_json(CAPTION_INSTRUCTIONS.format(image_prompt=image_prompt))
+    return _chat_json(CAPTION_INSTRUCTIONS.format(image_prompt=image_prompt, cta_line=cta_line()))
 
 
 def generate_image(image_prompt: str, label: str = "") -> str:

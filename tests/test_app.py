@@ -134,3 +134,36 @@ def test_cleanup_media(post_id):
     assert not orphan.exists()
     assert not (config.MEDIA_DIR / post["image_file"]).exists()
     assert db.get_post(post_id)["image_file"] is None
+
+
+def test_post_slots_follow_us_dst(monkeypatch):
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    monkeypatch.setattr(scheduler, "POST_TZ", ny)
+    monkeypatch.setattr(config, "POST_TIMES", ["08:30"])
+    summer = scheduler.next_free_slot(datetime(2026, 7, 1, tzinfo=timezone.utc))
+    winter = scheduler.next_free_slot(datetime(2026, 12, 1, tzinfo=timezone.utc))
+    assert (summer.astimezone(ny).hour, summer.astimezone(ny).minute) == (8, 30)
+    assert (winter.astimezone(ny).hour, winter.astimezone(ny).minute) == (8, 30)
+    assert summer.hour != winter.hour  # jam UTC bergeser mengikuti DST
+
+
+def test_cta_only_every_nth_post(monkeypatch):
+    from app import generator
+    monkeypatch.setattr(config, "PRODUCT_NAME", "The Family Ready Binder")
+    monkeypatch.setattr(config, "CTA_EVERY", 3)
+    db.set_setting("cta_idx", "0")
+    lines = [generator.cta_line() for _ in range(6)]
+    assert [line != generator.NO_CTA for line in lines] == [False, False, True, False, False, True]
+    monkeypatch.setattr(config, "PRODUCT_NAME", "")
+    assert generator.cta_line() == generator.NO_CTA
+
+
+def test_prompts_render():
+    from app import generator
+    text = generator.IDEA_INSTRUCTIONS.format(pillar="P", topic_line="T", recent="- x",
+                                              format_hint="story", cta_line=generator.NO_CTA)
+    assert '"story"' in text and "Comment YES" in generator.SYSTEM
+    assert generator.CAPTION_INSTRUCTIONS.format(image_prompt="x", cta_line="c")
+    prompt = generator.build_image_prompt({"format": "story", "headline": "The recipe card in her handwriting"})
+    assert "moment remembered" in prompt and "Checklist" not in prompt

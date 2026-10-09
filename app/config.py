@@ -61,7 +61,10 @@ PILLARS = [
 ]
 
 # --- Jadwal ---
-# Jam posting default (zona TIMEZONE). 19:30 & 07:30 WIB = pagi & malam waktu AS bagian timur.
+# Zona waktu untuk POST_TIMES. Disarankan America/New_York: jam posting otomatis mengikuti
+# pergantian jam musim panas/dingin (DST) di AS. Default sama dengan TIMEZONE agar .env lama tetap jalan.
+POST_TIMEZONE = os.getenv("POST_TIMEZONE", TIMEZONE)
+# Jam posting (zona POST_TIMEZONE)
 POST_TIMES = [t.strip() for t in os.getenv("POST_TIMES", "19:30,07:30").split(",") if t.strip()]
 # Buat draf otomatis setiap hari (masuk antrean approval, tidak langsung diposting)
 AUTO_GENERATE_DAILY = _bool("AUTO_GENERATE_DAILY", True)
@@ -71,6 +74,14 @@ AUTO_GENERATE_COUNT = int(os.getenv("AUTO_GENERATE_COUNT", "2"))
 MAX_LATE_HOURS = float(os.getenv("MAX_LATE_HOURS", "6"))
 # Gambar milik post yang ditolak dihapus setelah sekian hari
 MEDIA_RETENTION_DAYS = int(os.getenv("MEDIA_RETENTION_DAYS", "30"))
+
+# --- Produk (CTA halus sesekali) ---
+# Kosongkan PRODUCT_NAME bila belum ingin ada CTA produk sama sekali
+PRODUCT_NAME = os.getenv("PRODUCT_NAME", "")
+PRODUCT_DESCRIPTION = os.getenv("PRODUCT_DESCRIPTION", "")
+PRODUCT_URL = os.getenv("PRODUCT_URL", "")
+# 1 dari sekian post menyebut produk (sisanya murni konten bermanfaat)
+CTA_EVERY = max(1, int(os.getenv("CTA_EVERY", "5")))
 
 # --- Meta (Facebook Page + Instagram) ---
 # App ID & Secret dipakai halaman Pengaturan untuk menukar token jadi permanen

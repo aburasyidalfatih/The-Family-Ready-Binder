@@ -5,7 +5,7 @@
 <h1>#{{ post.id }} · {{ post.headline or post.topic }}</h1>
 <p class="muted">
   {{ post.pillar }} · Status: <b class="status s-{{ post.status }}">{{ post.status }}</b>
-  {% if post.scheduled_at and post.status in ('approved', 'publishing') %} · Tayang {{ post.scheduled_at | local_time }} ({{ config.TIMEZONE }}){% endif %}
+  {% if post.scheduled_at and post.status in ('approved', 'publishing') %} · Tayang {{ post.scheduled_at | local_time }} ({{ config.TIMEZONE }}){% if post.scheduled_at | audience_time %} = {{ post.scheduled_at | audience_time }}{% endif %}{% endif %}
 </p>
 
 {% if busy %}<div class="notice info">Sedang diproses… muat ulang halaman ini dalam ±1 menit.</div>{% endif %}
@@ -52,7 +52,7 @@
         <button class="btn" name="action" value="save">Simpan</button>
 
         {% if post.status in ('draft', 'rejected', 'failed', 'partial') %}
-        <button class="btn primary" name="action" value="approve_next">Setujui → slot berikutnya ({{ next_slot.replace('T', ' ') }})</button>
+        <button class="btn primary" name="action" value="approve_next">Setujui → slot berikutnya ({{ next_slot.replace('T', ' ') }}{% if next_slot_audience %} · {{ next_slot_audience }}{% endif %})</button>
         <div class="row">
           <input type="datetime-local" name="scheduled_at" value="{{ next_slot }}">
           <button class="btn" name="action" value="approve_at">Setujui di waktu ini</button>

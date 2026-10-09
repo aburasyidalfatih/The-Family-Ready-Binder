@@ -18,6 +18,7 @@ from . import config, connect, db, generator, publishers, scheduler
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
 TZ = ZoneInfo(config.TIMEZONE)
+POST_TZ = ZoneInfo(config.POST_TIMEZONE)
 PLATFORMS = ["facebook", "instagram", "threads"]
 
 # pekerjaan generate yang sedang berjalan (untuk ditampilkan di dashboard)
@@ -83,7 +84,15 @@ def local_input(iso: str | None) -> str:
     return datetime.fromisoformat(iso).astimezone(TZ).strftime("%Y-%m-%dT%H:%M")
 
 
+def audience_time(iso: str | None) -> str:
+    """Waktu tayang menurut zona audiens (POST_TIMEZONE), mis. "08:30 America/New_York"."""
+    if not iso or config.POST_TIMEZONE == config.TIMEZONE:
+        return ""
+    return f'{datetime.fromisoformat(iso).astimezone(POST_TZ):%H:%M} {config.POST_TIMEZONE}'
+
+
 templates.env.filters["local_time"] = local_time
+templates.env.filters["audience_time"] = audience_time
 templates.env.filters["local_input"] = local_input
 templates.env.globals.update(config=config, PLATFORMS=PLATFORMS, config_warnings=config.warnings)
 
@@ -249,7 +258,8 @@ def post_detail(request: Request, post_id: int):
             "post": post,
             "results": db.get_results(post_id),
             "busy": post_id in _jobs["busy_posts"],
-            "next_slot": local_input(utc_iso(scheduler.next_free_slot())),
+            "next_slot": local_input(utc_iso(slot := scheduler.next_free_slot())),
+            "next_slot_audience": audience_time(utc_iso(slot)),
             "pillars": config.PILLARS,
         },
     )

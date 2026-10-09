@@ -30,7 +30,7 @@
 {% if status == 'draft' %}
 <form method="post" action="/run-auto-generate" class="inline-form">
   <button class="btn">Buat {{ config.AUTO_GENERATE_COUNT }} draf otomatis sekarang</button>
-  <span class="muted">Draf otomatis harian: {{ 'aktif jam ' ~ config.AUTO_GENERATE_TIME if config.AUTO_GENERATE_DAILY else 'nonaktif' }} · Jam posting: {{ config.POST_TIMES | join(', ') }} ({{ config.TIMEZONE }})</span>
+  <span class="muted">Draf otomatis harian: {{ 'aktif jam ' ~ config.AUTO_GENERATE_TIME if config.AUTO_GENERATE_DAILY else 'nonaktif' }} · Jam posting: {{ config.POST_TIMES | join(', ') }} ({{ config.POST_TIMEZONE }})</span>
 </form>
 {% endif %}
 
@@ -49,7 +49,7 @@
       <div class="pillar">{{ p.pillar }}</div>
       <div class="headline">{{ p.headline or p.topic }}</div>
       {% if p.scheduled_at and p.status in ('approved', 'publishing') %}
-      <div class="when">Tayang: {{ p.scheduled_at | local_time }}</div>
+      <div class="when">Tayang: {{ p.scheduled_at | local_time }}{% if p.scheduled_at | audience_time %} · {{ p.scheduled_at | audience_time }}{% endif %}</div>
       {% elif p.published_at %}
       <div class="when">Diposting: {{ p.published_at | local_time }}</div>
       {% endif %}
