@@ -14,7 +14,18 @@ Gaya konten: campuran checklist, daftar bernomor, pertanyaan, kutipan, dan cerit
 
 ## 1. Coba di komputer sendiri (5 menit, gratis)
 
-Butuh Python 3.11+.
+Butuh Python 3.11+ ([unduh di sini](https://www.python.org/downloads/); di Windows centang **Add Python to PATH** saat memasang).
+
+### Cara cepat: satu perintah
+
+- **Windows:** klik dua kali `run-local.bat`
+- **Mac/Linux:** buka terminal di folder ini, lalu jalankan `./run-local.sh`
+
+Skrip ini otomatis membuat virtual environment, memasang dependency, dan (bila belum ada) membuat file `.env` dalam **mode uji coba** (`FAKE_AI=true`, `DRY_RUN=true`) dengan password dashboard acak. Alamat dan login dashboard ditampilkan di layar. Port bisa diganti dengan `PORT=8080 ./run-local.sh` (Windows: `set PORT=8080` lalu jalankan `run-local.bat`). Tekan Ctrl+C untuk berhenti.
+
+File `.env` yang sudah ada tidak diubah, jadi setelah Anda mengisi `OPENAI_API_KEY` dan mengubah `FAKE_AI=false`, cukup jalankan skrip yang sama lagi.
+
+### Cara manual
 
 ```bash
 python -m venv .venv
